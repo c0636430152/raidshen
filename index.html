@@ -1,564 +1,315 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-TW" class="dark">
+
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>祐玄 yushenofficial 揪團紀錄中心</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>祐玄 yushenofficial | 揪團自動監控系統 v6.0</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        twitch: { DEFAULT: '#9146FF', accent: '#00e5ff', dark: '#0e0e10', card: '#18181b' }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://unpkg.com/tmi.js@1.8.5/dist/tmi.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tmi.js@1.8.5/tmi.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #0e0e10; color: #efeff1; }
-        .twitch-gradient { background: linear-gradient(135deg, #9146ff 0%, #702cf1 100%); }
-        .glass { background: rgba(24, 24, 27, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
-        .raid-row-t1 { background: rgba(250, 204, 21, 0.05); border: 1px solid rgba(250, 204, 21, 0.1); }
-        .raid-row-t2 { background: rgba(34, 211, 238, 0.05); border: 1px solid rgba(34, 211, 238, 0.1); }
-        .raid-row-t3 { background: rgba(107, 114, 128, 0.05); border: 1px solid rgba(107, 114, 128, 0.1); }
-        .animate-pulse-subtle { animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .7; } }
+        body { font-family: 'Inter', 'Noto Sans TC', sans-serif; background: #0e0e10; color: #efeff1; }
+        .glass-panel { background: rgba(24, 24, 27, 0.7); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        
+        /* 盟友分級樣式 */
+        .card-t1 { background: rgba(250, 204, 21, 0.08) !important; border-left: 4px solid #F59E0B !important; }
+        .card-t2 { background: rgba(34, 211, 238, 0.08) !important; border-left: 4px solid #3B82F6 !important; }
+        .card-t3 { background: rgba(156, 163, 175, 0.08) !important; border-left: 4px solid #6B7280 !important; }
+        .card-none { background: rgba(255, 255, 255, 0.03) !important; border-left: 4px solid transparent !important; }
+
+        .badge-t1 { background: #FACC15; color: #451A03; }
+        .badge-t2 { background: #22D3EE; color: #fff; }
+        .badge-t3 { background: #4B5563; color: #fff; }
+        .badge-none { background: rgba(255, 255, 255, 0.1); color: #9CA3AF; }
+
+        .live-ring::after {
+            content: ''; position: absolute; inset: -5px; border-radius: 50%;
+            border: 2px solid #ef4444; animation: pulse-ring 2s infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(1.3); opacity: 0; }
+        }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #3a3a3d; border-radius: 10px; }
     </style>
 </head>
+
 <body class="pb-20">
-    <!-- 上方狀態條 -->
-    <div class="bg-[#18181b] border-b border-white/5 py-2 px-6 flex justify-between items-center text-[10px] font-black tracking-widest uppercase text-gray-500">
-        <div class="flex items-center gap-2"><i data-lucide="calendar-days" class="w-3.5 h-3.5 text-[#9146ff]"></i> <span id="currentDate">加載中...</span></div>
-        <div class="flex items-center gap-2 text-white">
-            <i data-lucide="clock" class="w-3.5 h-3.5 text-[#9146ff]"></i> 
-            <span id="currentTime" class="font-mono text-sm">00:00:00</span>
-        </div>
+    <!-- Top Minimalist Clock Bar -->
+    <div class="w-full bg-black/60 border-b border-white/5 py-1.5 px-8 text-center">
+        <span id="top-clock" class="text-[10px] font-black tracking-[0.3em] text-gray-500 uppercase">2026.04.26 SUNDAY 00:00:00</span>
     </div>
 
-    <!-- 導覽列 -->
-    <header class="sticky top-0 z-50 bg-[#0e0e10]/95 backdrop-blur-md border-b border-white/5 px-6 py-4 shadow-xl">
-        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-            <div class="flex items-center gap-3">
-                <div class="p-2.5 bg-[#9146ff] rounded-xl shadow-[0_0_20px_rgba(145,70,255,0.4)] text-white"><i data-lucide="activity" class="w-5 h-5"></i></div>
-                <div>
-                    <h1 class="text-xl font-black tracking-tight text-white flex items-center gap-2">祐玄 yushenofficial <i data-lucide="camera" class="w-4 h-4 opacity-30"></i></h1>
-                    <div class="flex items-center gap-2">
-                        <span id="monitorDot" class="w-1.5 h-1.5 rounded-full bg-gray-600"></span>
-                        <p id="monitorStatus" class="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">系統就緒</p>
-                    </div>
+    <header class="sticky top-0 z-50 bg-[#0e0e10]/80 backdrop-blur-xl border-b border-white/5 px-8 py-4">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-4">
+                <div class="w-10 h-10 bg-twitch rounded-xl flex items-center justify-center shadow-lg shadow-twitch/20">
+                    <i data-lucide="radar" class="w-6 h-6 text-white"></i>
+                </div>
+                <h1 class="text-2xl font-black italic tracking-tighter">祐玄揪團監控中心</h1>
+            </div>
+            <div class="flex items-center gap-6">
+                <div class="text-right border-r border-white/10 pr-6 mr-6 hidden sm:block">
+                    <div id="side-date" class="text-[10px] font-black text-gray-500 uppercase tracking-widest">2026.04.26</div>
+                    <div id="side-time" class="text-2xl font-black text-twitch-accent tracking-tighter">00:00:00</div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-widest">Auto Tracking Active</span>
                 </div>
             </div>
-            <nav class="flex bg-white/5 p-1 rounded-2xl border border-white/10">
-                <button onclick="switchTab('history')" id="tab-history" class="tab-btn px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 bg-[#9146ff] text-white">
-                    <i data-lucide="history" class="w-3.5 h-3.5"></i> 歷史雷達
-                </button>
-                <button onclick="switchTab('allies')" id="tab-allies" class="tab-btn px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 text-gray-400 hover:text-white">
-                    <i data-lucide="users" class="w-3.5 h-3.5"></i> 盟友名冊
-                </button>
-                <button onclick="switchTab('manual')" id="tab-manual" class="tab-btn px-5 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 text-gray-400 hover:text-white">
-                    <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> 補錄資料
-                </button>
-            </nav>
         </div>
     </header>
 
-    <main class="max-w-7xl mx-auto p-6">
-        <!-- 指標區域 -->
-        <div class="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-8">
-            <div class="bg-[#9146ff]/5 border border-[#9146ff]/30 p-5 rounded-3xl">
-                <p class="text-[10px] font-black text-[#9146ff] uppercase mb-2 flex items-center gap-2"><i data-lucide="zap" class="w-3 h-3"></i> 總累積導流</p>
-                <div class="flex items-baseline gap-1.5">
-                    <p id="stat-totalV" class="text-3xl font-black text-white tabular-nums tracking-tighter">0</p>
-                    <span class="text-[10px] text-gray-600 font-bold uppercase">人</span>
+    <main class="max-w-6xl mx-auto mt-10 px-8">
+        <!-- Live Status Card -->
+        <div class="glass-panel rounded-[2.5rem] p-8 md:p-10 mb-10 flex flex-col md:flex-row items-center gap-10 relative overflow-hidden">
+            <div class="absolute top-0 right-0 w-80 h-80 bg-twitch/10 blur-[100px] rounded-full -z-10"></div>
+            
+            <div class="relative flex-shrink-0">
+                <div id="target-avatar-container" class="w-36 h-36 md:w-48 md:h-48 rounded-full border-4 border-white/10 p-1 transition-all duration-500">
+                    <img id="target-img" src="https://ui-avatars.com/api/?name=Y&background=18181b&color=9146FF" class="w-full h-full rounded-full object-cover">
                 </div>
+                <div id="live-badge" class="absolute -bottom-2 left-1/2 -translate-x-1/2 px-6 py-1.5 rounded-full text-xs font-black uppercase tracking-[0.2em] bg-gray-700 border-2 border-[#0e0e10]">OFFLINE</div>
             </div>
-            <div class="bg-cyan-500/5 border border-cyan-500/30 p-5 rounded-3xl">
-                <p class="text-[10px] font-black text-cyan-400 uppercase mb-2 flex items-center gap-2"><i data-lucide="bar-chart-3" class="w-3 h-3"></i> 本月導流</p>
-                <div class="flex items-baseline gap-1.5">
-                    <p id="stat-monthV" class="text-3xl font-black text-cyan-400 tabular-nums tracking-tighter">0</p>
-                    <span class="text-[10px] text-gray-600 font-bold uppercase">人</span>
+
+            <div class="flex-1 text-center md:text-left">
+                <div class="flex items-center justify-center md:justify-start gap-4 mb-3">
+                    <h2 class="text-4xl md:text-5xl font-black italic tracking-tighter">yushenofficial</h2>
+                    <a href="https://twitch.tv/yushenofficial" target="_blank" class="text-twitch hover:text-twitch-accent transition-colors"><i data-lucide="external-link" class="w-7 h-7"></i></a>
                 </div>
-            </div>
-            <div class="raid-row-t1 p-5 rounded-3xl">
-                <p class="text-[10px] font-black text-yellow-400 uppercase mb-2 flex items-center gap-2"><i data-lucide="star" class="w-3 h-3"></i> T1 揪團</p>
-                <p id="stat-t1" class="text-2xl font-black text-yellow-400">0</p>
-            </div>
-            <div class="raid-row-t2 p-5 rounded-3xl">
-                <p class="text-[10px] font-black text-cyan-400 uppercase mb-2 flex items-center gap-2"><i data-lucide="award" class="w-3 h-3"></i> T2 揪團</p>
-                <p id="stat-t2" class="text-2xl font-black text-cyan-400">0</p>
-            </div>
-            <div class="raid-row-t3 p-5 rounded-3xl">
-                <p class="text-[10px] font-black text-gray-400 uppercase mb-2 flex items-center gap-2"><i data-lucide="shield-alert" class="w-3 h-3"></i> T3 揪團</p>
-                <p id="stat-t3" class="text-2xl font-black text-gray-400">0</p>
-            </div>
-            <div class="bg-white/5 border border-white/10 p-5 rounded-3xl">
-                <p class="text-[10px] font-black text-gray-500 uppercase mb-2 flex items-center gap-2"><i data-lucide="trending-up" class="w-3 h-3"></i> 紀錄總次數</p>
-                <p id="stat-totalRaids" class="text-2xl font-black text-white">0</p>
+                <p id="stream-title" class="text-gray-400 font-bold italic text-lg md:text-xl line-clamp-2 mb-8 leading-relaxed">同步實況標題中...</p>
+                
+                <div class="flex flex-wrap justify-center md:justify-start gap-5">
+                    <div class="bg-black/40 px-6 py-3 rounded-2xl border border-white/5 flex items-center gap-4">
+                        <i data-lucide="users" class="w-6 h-6 text-twitch-accent"></i>
+                        <span id="v-count" class="text-2xl font-black tracking-tight">0</span>
+                        <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Live</span>
+                    </div>
+                    <div class="bg-black/40 px-6 py-3 rounded-2xl border border-white/5 flex items-center gap-4">
+                        <i data-lucide="zap" class="w-6 h-6 text-red-500"></i>
+                        <span id="r-total" class="text-2xl font-black tracking-tight">0</span>
+                        <span class="text-[10px] font-black text-gray-600 uppercase tracking-widest">Total Raids</span>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- 頻道面板 -->
-        <div id="channelCard" class="relative overflow-hidden rounded-[2.5rem] p-8 mb-10 transition-all border border-white/5 bg-[#18181b] shadow-2xl">
-            <div class="flex flex-col md:flex-row items-center gap-8 relative z-10">
-                <div class="relative shrink-0">
-                    <img id="targetAvatar" src="https://ui-avatars.com/api/?name=Y&background=18181b&color=fff" class="w-28 h-28 rounded-full object-cover border-4 border-white/10 grayscale">
-                    <div id="liveBadge" class="hidden absolute -bottom-2 left-1/2 -translate-x-1/2 bg-red-500 text-white text-[10px] font-black px-4 py-1 rounded-full border-2 border-[#1a1a1c] shadow-lg">LIVE</div>
-                </div>
-                <div class="flex-1 text-center md:text-left">
-                    <div class="flex flex-col md:flex-row items-center gap-4 mb-3">
-                        <h2 class="text-3xl font-black tracking-tighter text-white">祐玄 yushenofficial</h2>
-                        <div id="viewerDisplay" class="hidden bg-red-500/10 px-6 py-3 rounded-2xl text-red-500 border border-red-500/20 items-center gap-4">
-                            <i data-lucide="users-2" class="w-6 h-6"></i> 
-                            <span id="currentViewer" class="text-6xl font-black tabular-nums tracking-tighter italic">0</span> 
-                            <span class="text-sm font-bold uppercase tracking-[0.2em] opacity-80">觀眾</span>
-                        </div>
-                    </div>
-                    <div id="streamInfo">
-                        <p class="text-lg font-bold text-gray-500 italic mt-1 flex items-center justify-center md:justify-start gap-3"><i data-lucide="moon" class="w-5 h-5"></i> 頻道目前休息中...</p>
-                    </div>
-                </div>
-                <button id="monitorBtn" onclick="toggleMonitor()" class="px-12 py-6 rounded-2xl font-black text-xl transition-all shadow-2xl active:scale-95 bg-[#9146ff] hover:bg-[#772ce8] text-white">
-                    啟動自動監控
+        <!-- History List -->
+        <div class="glass-panel rounded-[3rem] overflow-hidden shadow-2xl">
+            <div class="p-8 border-b border-white/5 bg-white/[0.02] flex justify-between items-center">
+                <h3 class="text-2xl font-black italic uppercase tracking-tighter flex items-center gap-4">
+                    <i data-lucide="history" class="w-7 h-7 text-twitch-accent"></i> 歷史自動抓取紀錄
+                </h3>
+                <button onclick="clearLogs()" class="p-2.5 bg-red-500/10 hover:bg-red-500/20 rounded-xl text-red-500 transition-colors">
+                    <i data-lucide="trash-2" class="w-5 h-5"></i>
                 </button>
             </div>
-        </div>
-
-        <!-- 內容區域 -->
-        <div id="historyView" class="tab-content">
-            <div class="grid grid-cols-12 gap-4 px-8 py-4 bg-white/5 rounded-2xl mb-4 border border-white/5 text-[10px] font-black text-gray-500 uppercase hidden md:grid">
-                <div class="col-span-1 text-center">序次</div>
-                <div class="col-span-1 text-center">層級</div>
-                <div class="col-span-3 ml-4">揪團對象</div>
-                <div class="col-span-2 text-center">導流人數</div>
-                <div class="col-span-2 text-center">追蹤增長 (1hr)</div>
-                <div class="col-span-2 text-right">發生時間</div>
-                <div class="col-span-1 text-right px-2">管理</div>
-            </div>
-            <div id="raidLogContainer" class="space-y-4">
-                <!-- 紀錄將由 JS 動態生成 -->
-            </div>
-        </div>
-
-        <div id="alliesView" class="tab-content hidden">
-            <div class="relative mb-10">
-                <i data-lucide="search" class="absolute left-6 top-1/2 -translate-y-1/2 w-6 h-6 text-gray-500"></i>
-                <input type="text" id="allySearch" onkeyup="filterAllies()" placeholder="搜尋盟友名稱或 ID..." class="w-full bg-[#18181b] border border-white/10 rounded-2xl py-6 pl-16 pr-8 text-lg font-bold outline-none focus:border-[#9146ff]/50 shadow-2xl">
-            </div>
-            <div id="alliesContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- 盟友卡片 -->
-            </div>
-        </div>
-
-        <div id="manualView" class="tab-content hidden">
-            <div class="max-w-xl mx-auto glass rounded-[4rem] p-12 shadow-2xl relative overflow-hidden">
-                <div class="mb-12 text-center bg-black/60 py-10 rounded-[2.5rem] border border-white/5 shadow-inner">
-                    <p class="text-[10px] font-black text-[#9146ff] uppercase tracking-[0.4em] mb-4">系統對時同步</p>
-                    <p id="manualClock" class="text-6xl font-black text-white tabular-nums font-mono">00:00:00</p>
-                </div>
-                <h2 class="text-3xl font-black mb-10 flex items-center gap-4"><i data-lucide="zap" class="text-yellow-400"></i> 手動資料補錄</h2>
-                <div class="space-y-10">
-                    <div class="space-y-4">
-                        <label class="text-[11px] font-black text-gray-500 uppercase px-2">目標 Twitch 帳號 ID</label>
-                        <input type="text" id="manualId" placeholder="例如: meitoo85" class="w-full bg-black/50 border border-white/10 rounded-3xl p-7 outline-none focus:border-[#9146ff]/50 text-2xl text-white">
-                    </div>
-                    <div class="space-y-4">
-                        <label class="text-[11px] font-black text-gray-500 uppercase px-2">導流人數 (Viewer Count)</label>
-                        <input type="number" id="manualCount" placeholder="輸入當下的導流人數" class="w-full bg-black/50 border border-white/10 rounded-3xl p-7 outline-none focus:border-[#9146ff]/50 text-2xl text-white">
-                    </div>
-                    <button onclick="submitManual()" id="submitBtn" class="w-full py-7 rounded-[2.5rem] font-black text-3xl shadow-2xl bg-[#9146ff] text-white hover:bg-[#772ce8] transition-all active:scale-95">
-                        確認補登資料
-                    </button>
+            <div id="log-list" class="p-6 md:p-8 space-y-4 max-h-[800px] overflow-y-auto custom-scrollbar">
+                <!-- Data will be injected here -->
+                <div class="py-32 text-center opacity-20 italic">
+                    <i data-lucide="search" class="w-16 h-16 mx-auto mb-4"></i>
+                    正在監聽祐玄的揪團動作...
                 </div>
             </div>
         </div>
     </main>
 
-    <div class="fixed bottom-10 right-10 pointer-events-none z-50">
-        <div class="bg-[#18181b]/95 backdrop-blur-2xl px-8 py-4 rounded-full border border-white/10 flex items-center gap-4 shadow-3xl">
-            <div id="statusDot" class="w-3 h-3 rounded-full bg-gray-600"></div>
-            <p id="floatingStatus" class="text-xs font-black text-white uppercase tracking-tighter">雷達狀態: 休眠中</p>
-        </div>
-    </div>
+    <script>
+        const API = { client: '3llrahqqu4s0gi17eehtoft8g60may', secret: 'dyvy4obvo5p8yu0p01h8cvayjji4yf', token: null };
+        const TARGET = 'yushenofficial';
 
-    <!-- Firebase SDK & App Logic -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, query, onSnapshot, serverTimestamp, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.0.0/firebase-firestore.js";
-
-        // Firebase Config & App ID (來自系統注入)
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'yushen-raid-monitor';
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-        
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        const MONITOR_TARGET = 'yushenofficial';
-        const TWITCH_CLIENT_ID = '3llrahqqu4s0gi17eehtoft8g60may';
-        const TWITCH_CLIENT_SECRET = 'dyvy4obvo5p8yu0p01h8cvayjji4yf';
-
-        const INITIAL_ALLIES = [
-            { name: "一顆歡茄", id: "meitoo85", type: "T1", intro: "APEX+LOL+心動小鎮" },
-            { name: "一顆地呱", id: "a12360107", type: "T1", intro: "戶外台" },
-            { name: "巨跟萌妹", id: "xivxy", type: "T1", intro: "瓦羅蘭" },
-            { name: "兔妮毛球", id: "xmaoqiux", type: "T1", intro: "燕雲十六聲" },
-            { name: "毛毛躁躁", id: "maomao77777", type: "T1", intro: "LOL(實況邊緣人)" },
-            { name: "粉紅牛逼狗", id: "bandso2000", type: "T1", intro: "LOL(實況邊緣人)" },
-            { name: "牛奶凌", id: "chiiling04", type: "T1", intro: "瓦羅蘭。與芊妘妘妘關係良好。" },
-            { name: "王爆豪", id: "gjesst4628", type: "T1", intro: "楓之谷、戰旗(棄坑)。" },
-            { name: "摸尼", id: "mori1028", type: "T1", intro: "楓之谷(實況邊緣人)" },
-            { name: "冠希老師", id: "lcl_wiz29", type: "T1", intro: "STEAM雜食，蛇窩老闆。" },
-            { name: "1234個蛋", id: "4_egg", type: "T1", intro: "ARAM+APEX+STEAM" },
-            { name: "小俞ツ", id: "xiaoyu24323", type: "T1", intro: "三角洲玩家，兼任陪玩。" },
-            { name: "窩4橘毛", id: "orangemao", type: "T1", intro: "瓦羅蘭，人脈良好。" },
-            { name: "肉先生", id: "ggsod", type: "T1", intro: "雜談高手，好相處。" },
-            { name: "詩詩44", id: "shishichuchu", type: "T1", intro: "滑雪教練。" },
-            { name: "落花花", id: "a0411utumn", type: "T1", intro: "懂人情世故，擅長交際。" },
-            { name: "乃萬在台第一迷弟", id: "johnny2562440", type: "T1", intro: "LOL台。" },
-            { name: "厭世三星蔥", id: "kouyifu", type: "T1", intro: "正在轉職繪師。" },
-            { name: "乃教練", id: "a1000281", type: "T2", intro: "-" },
-            { name: "苒苒です", id: "ranran1019", type: "T2", intro: "-" },
-            { name: "貓貓隊長", id: "aumimimi", type: "T2", intro: "-" },
-            { name: "良董電腦", id: "liang_dong_3c", type: "T2", intro: "-" },
-            { name: "魚子子", id: "yuzz727", type: "T2", intro: "-" },
-            { name: "大布拉拉", id: "lala_8282", type: "T2", intro: "-" },
-            { name: "旻熊", id: "minxiongtw", type: "T2", intro: "-" },
-            { name: "蓋蓋子", id: "xuj1n9e", type: "T2", intro: "-" },
-            { name: "啊呱呱", id: "gua910625", type: "T2", intro: "-" },
-            { name: "卡滋嘎蹦", id: "kazgabong", type: "T2", intro: "-" },
-            { name: "Kerwinnn", id: "kerwinnn_", type: "T2", intro: "-" },
-            { name: "西陵珩", id: "linheng0310", type: "T2", intro: "-" },
-            { name: "琳子", id: "lynnnnn_819", type: "T2", intro: "-" },
-            { name: "楓葉掉了變落葉", id: "maple04033", type: "T2", intro: "-" },
-            { name: "麻吉了", id: "muacheeee", type: "T2", intro: "-" },
-            { name: "可可脆片蜜糖波堤", id: "hanidonatsu", type: "T2", intro: "-" },
-            { name: "鈴姆", id: "lingmu_ch", type: "T2", intro: "-" },
-            { name: "橘子果園", id: "orz699", type: "T2", intro: "-" },
-            { name: "賣茹小", id: "chiuruby", type: "T2", intro: "-" },
-            { name: "霜淇淋啦", id: "st101715", type: "T2", intro: "-" },
-            { name: "兩萬六", id: "only26k", type: "T2", intro: "-" },
-            { name: "檸檬羊", id: "lemonyang", type: "T2", intro: "-" },
-            { name: "劉作康", id: "lock1ngtnt", type: "T2", intro: "-" },
-            { name: "阿奎", id: "znnnxll_", type: "T2", intro: "-" },
-            { name: "傑洛奈", id: "neun09", type: "T2", intro: "-" },
-            { name: "芋_圓", id: "yyyc_o1o1", type: "T2", intro: "-" },
-            { name: "狗活", id: "wsnewoff5", type: "T2" },
-            { name: "辛沃", id: "yinwei_exe", type: "T2" },
-            { name: "琳琳_", id: "tychelin", type: "T3" },
-            { name: "芊芊芊芊芊", id: "qiannnzl", type: "T3" },
-            { name: "年糕喵", id: "aas0220", type: "T3" },
-            { name: "莓莓丶", id: "omimimimi123", type: "T3" },
-            { name: "嘟桑", id: "amidodo_", type: "T3" },
-            { name: "我是林木木", id: "xmoooomx", type: "T3" },
-            { name: "柚花籽", id: "yuukaha", type: "T3" },
-            { name: "早安傑米", id: "jamie_oovoo", type: "T3" },
-            { name: "起司帕尼尼", id: "sawaa0816", type: "T3" },
-            { name: "hahahe0304", id: "hahahe0304", type: "T3" }
+        // 盟友名單 (內含 76 位盟友 ID)
+        const ALLIES = [
+            { id: "meitoo85", type: "T1" }, { id: "a12360107", type: "T1" }, { id: "xivxy", type: "T1" }, { id: "xmaoqiux", type: "T1" }, 
+            { id: "maomao77777", type: "T1" }, { id: "bandso2000", type: "T1" }, { id: "chiiling04", type: "T1" }, { id: "gjesst4628", type: "T1" },
+            { id: "mori1028", type: "T1" }, { id: "lcl_wiz29", type: "T1" }, { id: "4_egg", type: "T1" }, { id: "xiaoyu24323", type: "T1" },
+            { id: "orangemao", type: "T1" }, { id: "ggsod", type: "T1" }, { id: "shishichuchu", type: "T1" }, { id: "a0411utumn", type: "T1" },
+            { id: "johnny2562440", type: "T1" }, { id: "kouyifu", type: "T1" }, { id: "catchbunny", type: "T1" }, { id: "betty_bouod", type: "T1" },
+            { id: "000lin11", type: "T1" }, { id: "tin_202", type: "T1" }, { id: "yating1222", type: "T1" }, { id: "sukaomao", type: "T1" },
+            { id: "bonnyyy_", type: "T1" }, { id: "snowcow5200", type: "T1" }, { id: "yukai0915", type: "T1" }, { id: "ting5211", type: "T1" },
+            { id: "hua1031_", type: "T1" }, { id: "cheesepotato99", type: "T1" }, { id: "susi1128", type: "T1" }, { id: "memejaiovo", type: "T1" },
+            { id: "j8899", type: "T1" }, { id: "shih_n", type: "T1" }, { id: "lingling0045", type: "T1" }, { id: "wsx70529", type: "T1" },
+            { id: "hamiguaa", type: "T1" }, { id: "dada6621", type: "T1" },
+            { id: "a1000281", type: "T2" }, { id: "ranran1019", type: "T2" }, { id: "aumimimi", type: "T2" }, { id: "liang_dong_3c", type: "T2" },
+            { id: "yuzz727", type: "T2" }, { id: "lala_8282", type: "T2" }, { id: "minxiongtw", type: "T2" }, { id: "xuj1n9e", type: "T2" },
+            { id: "gua910625", type: "T2" }, { id: "kazgabong", type: "T2" }, { id: "kerwinnn_", type: "T2" }, { id: "linheng0310", type: "T2" },
+            { id: "lynnnnn_819", type: "T2" }, { id: "maple04033", type: "T2" }, { id: "muacheeee", type: "T2" }, { id: "hanidonatsu", type: "T2" },
+            { id: "lingmu_ch", type: "T2" }, { id: "orz699", type: "T2" }, { id: "chiuruby", type: "T2" }, { id: "st101715", type: "T2" },
+            { id: "only26k", type: "T2" }, { id: "lemonyang", type: "T2" }, { id: "lock1ngtnt", type: "T2" }, { id: "znnnxll_", type: "T2" },
+            { id: "neun09", type: "T2" }, { id: "yyyc_o1o1", type: "T2" }, { id: "wsnewoff5", type: "T2" }, { id: "yinwei_exe", type: "T2" },
+            { id: "tychelin", type: "T3" }, { id: "qiannnzl", type: "T3" }, { id: "aas0220", type: "T3" }, { id: "omimimimi123", type: "T3" },
+            { id: "amidodo_", type: "T3" }, { id: "xmoooomx", type: "T3" }, { id: "yuukaha", type: "T3" }, { id: "jamie_oovoo", type: "T3" },
+            { id: "sawaa0816", type: "T3" }, { id: "hahahe0304", type: "T3" }
         ];
 
-        let raidLogs = [];
-        let isAutoMonitoring = false;
-        let tmiClient = null;
-
-        // 初始化
-        async function init() {
-            try {
-                // Rule 3: Auth FIRST and await it
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
-                } else {
-                    await signInAnonymously(auth);
-                }
-
-                // Only start operations after successful auth
-                listenToLogs();
-                syncTwitch();
-                setInterval(syncTwitch, 60000);
-                updateClock();
-                setInterval(updateClock, 1000);
-                renderAllies();
-                lucide.createIcons();
-            } catch (err) {
-                console.error("Firebase 初始化/認證失敗:", err);
-            }
-        }
-
+        // --- Basic UI ---
         function updateClock() {
             const now = new Date();
+            const dateStr = now.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '.');
+            const dayStr = now.toLocaleDateString('en-US', { weekday: 'long' });
             const timeStr = now.toLocaleTimeString('zh-TW', { hour12: false });
-            const clockEl = document.getElementById('currentTime');
-            const manualClockEl = document.getElementById('manualClock');
-            if(clockEl) clockEl.textContent = timeStr;
-            if(manualClockEl) manualClockEl.textContent = timeStr;
-            document.getElementById('currentDate').textContent = now.toLocaleDateString('zh-TW', { month: 'long', year: 'numeric' });
-        }
-
-        function listenToLogs() {
-            if (!auth.currentUser) return; // Guard: Auth before query
             
-            // Rule 1: Strict Paths
-            const q = collection(db, 'artifacts', appId, 'public', 'data', 'raid_logs');
-            
-            // Success and Error callbacks required
-            onSnapshot(q, (snapshot) => {
-                raidLogs = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
-                    .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
-                renderLogs();
-                updateStats();
-            }, (err) => {
-                console.error("日誌讀取權限錯誤:", err);
-            });
+            document.getElementById('top-clock').innerText = `${dateStr} ${dayStr} ${timeStr}`;
+            document.getElementById('side-date').innerText = dateStr;
+            document.getElementById('side-time').innerText = timeStr;
         }
+        setInterval(updateClock, 1000); updateClock();
 
-        async function syncTwitch() {
+        // --- Twitch API Logic ---
+        async function getToken() {
             try {
-                const tokenRes = await fetch(`https://id.twitch.tv/oauth2/token?client_id=${TWITCH_CLIENT_ID}&client_secret=${TWITCH_CLIENT_SECRET}&grant_type=client_credentials`, { method: 'POST' });
-                const { access_token } = await tokenRes.json();
+                const res = await fetch(`https://id.twitch.tv/oauth2/token?client_id=${API.client}&client_secret=${API.secret}&grant_type=client_credentials`, { method: 'POST' });
+                const d = await res.json(); API.token = d.access_token; return d.access_token;
+            } catch (e) { return null; }
+        }
 
-                const streamRes = await fetch(`https://api.twitch.tv/helix/streams?user_login=${MONITOR_TARGET}`, {
-                    headers: { 'Client-ID': TWITCH_CLIENT_ID, 'Authorization': `Bearer ${access_token}` }
-                });
-                const streamData = await streamRes.json();
-                const userRes = await fetch(`https://api.twitch.tv/helix/users?login=${MONITOR_TARGET}`, {
-                    headers: { 'Client-ID': TWITCH_CLIENT_ID, 'Authorization': `Bearer ${access_token}` }
-                });
-                const userData = await userRes.json();
-
-                const isLive = streamData.data && streamData.data.length > 0;
-                const avatar = userData.data && userData.data[0] ? userData.data[0].profile_image_url : "https://ui-avatars.com/api/?name=Y";
-
-                document.getElementById('targetAvatar').src = avatar;
-                document.getElementById('targetAvatar').classList.toggle('grayscale', !isLive);
-                document.getElementById('targetAvatar').classList.toggle('border-red-500', isLive);
-                document.getElementById('liveBadge').classList.toggle('hidden', !isLive);
+        async function syncLiveStatus() {
+            if (!API.token) await getToken();
+            if (!API.token) return;
+            try {
+                const [uRes, sRes] = await Promise.all([
+                    fetch(`https://api.twitch.tv/helix/users?login=${TARGET}`, { headers: { 'Client-ID': API.client, 'Authorization': `Bearer ${API.token}` } }),
+                    fetch(`https://api.twitch.tv/helix/streams?user_login=${TARGET}`, { headers: { 'Client-ID': API.client, 'Authorization': `Bearer ${API.token}` } })
+                ]);
+                const u = await uRes.json(); const s = await sRes.json();
                 
-                const card = document.getElementById('channelCard');
-                if(isLive) {
-                    card.style.background = 'linear-gradient(to bottom right, rgba(239, 68, 68, 0.1), rgba(153, 27, 27, 0.05))';
-                    card.style.borderColor = 'rgba(239, 68, 68, 0.3)';
-                    document.getElementById('viewerDisplay').classList.replace('hidden', 'flex');
-                    document.getElementById('currentViewer').textContent = streamData.data[0].viewer_count.toLocaleString();
-                    document.getElementById('streamInfo').innerHTML = `<p class="text-xl font-bold italic text-white opacity-90">「 ${streamData.data[0].title} 」</p>`;
+                if (u.data?.[0]) document.getElementById('target-img').src = u.data[0].profile_image_url;
+                
+                const badge = document.getElementById('live-badge');
+                const title = document.getElementById('stream-title');
+                const vcount = document.getElementById('v-count');
+                const avatarCont = document.getElementById('target-avatar-container');
+
+                if (s.data?.[0]) {
+                    badge.innerText = 'LIVE NOW';
+                    badge.className = 'absolute -bottom-2 left-1/2 -translate-x-1/2 px-6 py-1.5 rounded-full text-xs font-black uppercase tracking-[0.2em] bg-red-600 border-2 border-[#0e0e10] shadow-[0_0_20px_rgba(239,68,68,0.5)]';
+                    title.innerText = s.data[0].title;
+                    title.className = 'text-twitch-accent font-black italic text-lg md:text-xl line-clamp-2 mb-8 leading-relaxed';
+                    vcount.innerText = s.data[0].viewer_count.toLocaleString();
+                    avatarCont.classList.add('live-ring');
                 } else {
-                    card.style.background = '#18181b';
-                    card.style.borderColor = 'rgba(255, 255, 255, 0.05)';
-                    document.getElementById('viewerDisplay').classList.replace('flex', 'hidden');
-                    document.getElementById('streamInfo').innerHTML = `<p class="text-lg font-bold text-gray-500 italic mt-1 flex items-center gap-3"><i data-lucide="moon" class="w-5 h-5"></i> 頻道目前休息中...</p>`;
-                    lucide.createIcons();
+                    badge.innerText = 'OFFLINE';
+                    badge.className = 'absolute -bottom-2 left-1/2 -translate-x-1/2 px-6 py-1.5 rounded-full text-xs font-black uppercase tracking-[0.2em] bg-gray-700 border-2 border-[#0e0e10] shadow-xl';
+                    title.innerText = '祐玄目前尚未開台';
+                    title.className = 'text-gray-500 font-bold italic text-lg md:text-xl line-clamp-2 mb-8 leading-relaxed';
+                    vcount.innerText = '0';
+                    avatarCont.classList.remove('live-ring');
                 }
-            } catch (e) { console.error("Twitch 同步失敗:", e); }
+            } catch (err) { }
         }
 
-        window.toggleMonitor = function() {
-            isAutoMonitoring = !isAutoMonitoring;
-            const btn = document.getElementById('monitorBtn');
-            const status = document.getElementById('monitorStatus');
-            const dot = document.getElementById('monitorDot');
-            const floating = document.getElementById('floatingStatus');
-            const statusDot = document.getElementById('statusDot');
+        // --- Tracking ---
+        const irc = new tmi.Client({ channels: [TARGET] });
+        irc.on('usernotice', async (chan, user, msg, self) => {
+            if (user['msg-id'] === 'raid') {
+                const tid = user['msg-param-login'].toLowerCase();
+                const tname = user['msg-param-displayName'] || tid;
+                const count = parseInt(user['msg-param-viewerCount']) || 0;
+                
+                const ally = ALLIES.find(a => a.id.toLowerCase() === tid);
+                const type = ally ? ally.type : 'NONE';
+                
+                // 抓取被揪團者的頭像
+                let tAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(tname)}&background=18181b&color=9146FF`;
+                if (API.token) {
+                    try {
+                        const tRes = await fetch(`https://api.twitch.tv/helix/users?login=${tid}`, { headers: { 'Client-ID': API.client, 'Authorization': `Bearer ${API.token}` } });
+                        const tD = await tRes.json();
+                        if (tD.data?.[0]) tAvatar = tD.data[0].profile_image_url;
+                    } catch(e) {}
+                }
 
-            if(isAutoMonitoring) {
-                btn.textContent = '停止自動監控';
-                btn.classList.replace('bg-[#9146ff]', 'bg-red-600');
-                status.textContent = '連線監測中...';
-                dot.classList.replace('bg-gray-600', 'bg-green-500');
-                dot.classList.add('animate-pulse');
-                floating.textContent = '雷達狀態: 正在盯梢中';
-                statusDot.classList.replace('bg-gray-600', 'bg-green-500');
-                statusDot.classList.add('animate-pulse');
-
-                tmiClient = new tmi.Client({ channels: [MONITOR_TARGET] });
-                tmiClient.connect();
-                tmiClient.on('usernotice', (chan, msgid, stack, tags) => {
-                    if(msgid === 'raid') {
-                        const target = tags['msg-param-displayName'] || tags['msg-param-login'];
-                        const count = parseInt(tags['msg-param-viewerCount']) || 0;
-                        handleLog(target, count, 'SYSTEM_RADAR');
-                    }
-                });
-            } else {
-                btn.textContent = '啟動自動監控';
-                btn.classList.replace('bg-red-600', 'bg-[#9146ff]');
-                status.textContent = '系統就緒';
-                dot.classList.replace('bg-green-500', 'bg-gray-600');
-                dot.classList.remove('animate-pulse');
-                floating.textContent = '雷達狀態: 休眠中';
-                statusDot.classList.replace('bg-green-500', 'bg-gray-600');
-                statusDot.classList.remove('animate-pulse');
-                if(tmiClient) tmiClient.disconnect();
+                logNewRaid(tname, tid, count, type, tAvatar);
             }
-        };
+        });
+        irc.connect();
 
-        async function handleLog(target, count, type) {
-            if (!auth.currentUser) return;
-            const cleanId = target.toLowerCase().trim();
-            const ally = INITIAL_ALLIES.find(a => a.id.toLowerCase() === cleanId);
-            try {
-                // Rule 1: Strict Paths
-                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'raid_logs'), {
-                    targetId: cleanId,
-                    targetName: ally ? ally.name : '未知 (非盟友)',
-                    viewerCount: parseInt(count) || 0,
-                    tier: ally ? ally.type : 'N/A',
-                    isAlly: !!ally,
-                    timestamp: serverTimestamp(),
-                    createdBy: type,
-                    followerGrowth: null
-                });
-            } catch (e) { console.error("日誌寫入失敗:", e); }
+        function logNewRaid(name, id, count, type, avatar) {
+            const logs = JSON.parse(localStorage.getItem('yushen_v6_logs') || '[]');
+            const now = new Date();
+            logs.unshift({
+                name, id, count, type, avatar,
+                time: now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+                date: now.toLocaleDateString('zh-TW', { month: '2-digit', day: '2-digit' })
+            });
+            if (logs.length > 50) logs.pop();
+            localStorage.setItem('yushen_v6_logs', JSON.stringify(logs));
+            renderLogs();
         }
-
-        window.submitManual = async function() {
-            const id = document.getElementById('manualId').value;
-            const count = document.getElementById('manualCount').value;
-            if(!id || !count) return;
-            const btn = document.getElementById('submitBtn');
-            btn.disabled = true;
-            btn.textContent = '寫入中...';
-            await handleLog(id, count, 'MANUAL');
-            document.getElementById('manualId').value = '';
-            document.getElementById('manualCount').value = '';
-            btn.disabled = false;
-            btn.textContent = '確認補登資料';
-            switchTab('history');
-        };
-
-        window.deleteLog = async function(id) {
-            if(!auth.currentUser) return;
-            if(confirm("確定要刪除這筆紀錄嗎？")) {
-                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'raid_logs', id));
-            }
-        };
 
         function renderLogs() {
-            const container = document.getElementById('raidLogContainer');
-            if(raidLogs.length === 0) {
-                container.innerHTML = `<div class="text-center py-32 glass rounded-[3.5rem] italic text-gray-500 uppercase font-black">目前尚無紀錄</div>`;
+            const box = document.getElementById('log-list');
+            const logs = JSON.parse(localStorage.getItem('yushen_v6_logs') || '[]');
+            document.getElementById('r-total').innerText = logs.length;
+            
+            if (logs.length === 0) {
+                box.innerHTML = '<div class="py-32 text-center opacity-20 italic"><i data-lucide="search" class="w-16 h-16 mx-auto mb-4"></i>正在監聽祐玄的揪團動作...</div>';
+                lucide.createIcons({ root: box });
                 return;
             }
 
-            container.innerHTML = raidLogs.map((log, i) => {
-                const logDate = new Date(log.timestamp?.seconds * 1000);
+            box.innerHTML = logs.map(r => {
+                const cardClass = r.type === 'NONE' ? 'card-none' : `card-${r.type.toLowerCase()}`;
+                const badgeClass = r.type === 'NONE' ? 'badge-none' : `badge-${r.type.toLowerCase()}`;
+                const badgeLabel = r.type === 'NONE' ? '非盟友' : r.type;
                 
-                const monthlyLogs = raidLogs.filter(l => {
-                    const d = new Date(l.timestamp?.seconds * 1000);
-                    return d.getMonth() === logDate.getMonth() && d.getFullYear() === logDate.getFullYear();
-                }).reverse();
-                const mIndex = monthlyLogs.findIndex(l => l.id === log.id) + 1;
-
-                const tierClass = log.tier === 'T1' ? 'raid-row-t1 text-yellow-400' : log.tier === 'T2' ? 'raid-row-t2 text-cyan-400' : 'raid-row-t3 text-gray-400';
-                const badgeClass = log.tier === 'T1' ? 'bg-yellow-400 text-black' : log.tier === 'T2' ? 'bg-cyan-400 text-black' : 'bg-gray-500 text-white';
-
                 return `
-                    <div class="grid grid-cols-1 md:grid-cols-12 items-center gap-4 ${tierClass} p-6 rounded-[2.5rem] group transition-all hover:scale-[1.015]">
-                        <div class="md:col-span-1 flex flex-col items-center">
-                           <span class="text-[8px] text-gray-600 font-black uppercase">本月第</span>
-                           <div class="bg-white/10 w-10 h-10 rounded-full flex items-center justify-center font-black text-lg">${mIndex || '?'}</div>
-                        </div>
-                        <div class="md:col-span-1 flex justify-center">
-                            <div class="w-11 h-11 rounded-2xl flex items-center justify-center font-black text-xs ${badgeClass}">${log.tier}</div>
-                        </div>
-                        <div class="md:col-span-3 flex items-center gap-5 md:ml-4">
-                            <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(log.targetName)}&background=242424&color=fff" class="w-14 h-14 rounded-full border-2 border-white/10">
+                    <div class="glass-panel rounded-[2rem] p-6 flex items-center justify-between hover:scale-[1.01] transition-all duration-300 ${cardClass}">
+                        <div class="flex items-center gap-6">
+                            <div class="relative">
+                                <img src="${r.avatar}" class="w-16 h-16 rounded-2xl object-cover shadow-xl border border-white/10">
+                                <span class="absolute -top-2 -right-2 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-widest ${badgeClass}">${badgeLabel}</span>
+                            </div>
                             <div>
-                                <p class="font-black text-xl text-white">${log.targetName}</p>
-                                <p class="text-xs text-[#9146ff] font-black opacity-70 tracking-tight">@${log.targetId}</p>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-2xl font-black text-white italic tracking-tight">${r.name}</span>
+                                    <a href="https://twitch.tv/${r.id}" target="_blank" class="text-gray-600 hover:text-twitch-accent transition-colors"><i data-lucide="external-link" class="w-4 h-4"></i></a>
+                                </div>
+                                <div class="text-[10px] text-gray-500 font-black mt-1 uppercase tracking-[0.2em] flex items-center gap-2">
+                                    <i data-lucide="calendar" class="w-3.5 h-3.5"></i> ${r.date} 
+                                    <span class="opacity-20">|</span> 
+                                    <i data-lucide="clock" class="w-3.5 h-3.5"></i> ${r.time} 
+                                    <span class="opacity-20">|</span> 
+                                    @${r.id}
+                                </div>
                             </div>
                         </div>
-                        <div class="md:col-span-2 text-center">
-                            <div class="inline-flex items-center gap-1.5 bg-black/40 px-6 py-3 rounded-[2rem] border border-white/5">
-                               <span class="text-4xl font-black text-white italic tracking-tighter">${log.viewerCount}</span>
-                               <span class="text-[10px] text-gray-600 font-black">人</span>
-                            </div>
-                        </div>
-                        <div class="md:col-span-2 text-center">
-                            ${log.followerGrowth !== null ? `
-                                <div class="inline-flex items-center gap-1.5 bg-green-500/10 px-6 py-2.5 rounded-[2rem] text-green-500">
-                                   <span class="text-4xl font-black italic tracking-tighter">+${log.followerGrowth}</span>
-                                </div>
-                            ` : `
-                                <div class="inline-flex items-center gap-2 text-gray-600 text-xs font-black italic">
-                                   <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> 監測中...
-                                </div>
-                            `}
-                        </div>
-                        <div class="md:col-span-2 text-right text-xs font-black">
-                            <p class="text-gray-400">${logDate.toLocaleDateString()}</p>
-                            <p class="text-white">${logDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
-                        </div>
-                        <div class="md:col-span-1 text-right">
-                            <button onclick="deleteLog('${log.id}')" class="p-3 opacity-0 group-hover:opacity-100 text-gray-700 hover:text-red-500 transition-all"><i data-lucide="trash-2" class="w-5 h-5"></i></button>
+                        <div class="text-right">
+                            <div class="text-3xl font-black text-twitch-accent italic tracking-tighter">${r.count.toLocaleString()}</div>
+                            <div class="text-[9px] font-black text-gray-600 uppercase tracking-[0.2em]">Viewers Raided</div>
                         </div>
                     </div>
                 `;
             }).join('');
-            lucide.createIcons();
+            lucide.createIcons({ root: box });
         }
 
-        function updateStats() {
-            const now = new Date();
-            const currentMonth = now.getMonth();
-            const currentYear = now.getFullYear();
+        window.clearLogs = function() { if(confirm('確定清除紀錄？')) { localStorage.removeItem('yushen_v6_logs'); renderLogs(); } };
 
-            const totalV = raidLogs.reduce((acc, curr) => acc + (curr.viewerCount || 0), 0);
-            const monthlyLogs = raidLogs.filter(l => {
-                const d = new Date(l.timestamp?.seconds * 1000);
-                return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-            });
-            const monthV = monthlyLogs.reduce((acc, curr) => acc + (curr.viewerCount || 0), 0);
-            
-            document.getElementById('stat-totalV').textContent = totalV.toLocaleString();
-            document.getElementById('stat-monthV').textContent = monthV.toLocaleString();
-            document.getElementById('stat-t1').textContent = raidLogs.filter(l => l.tier === 'T1').length;
-            document.getElementById('stat-t2').textContent = raidLogs.filter(l => l.tier === 'T2').length;
-            document.getElementById('stat-t3').textContent = raidLogs.filter(l => l.tier === 'T3').length;
-            document.getElementById('stat-totalRaids').textContent = raidLogs.length;
-        }
-
-        function renderAllies() {
-            const container = document.getElementById('alliesContainer');
-            if(!container) return;
-            container.innerHTML = INITIAL_ALLIES.map(a => `
-                <div class="ally-card glass p-7 rounded-[3rem] flex flex-col gap-6 transition-all hover:scale-[1.03]" data-name="${a.name}" data-id="${a.id}">
-                    <div class="flex items-center gap-5">
-                        <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(a.name)}&background=242424&color=fff" class="w-16 h-16 rounded-full border-2 border-white/10">
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <p class="font-black text-xl text-white">${a.name}</p>
-                                <span class="text-[9px] font-black px-2 py-1 rounded-lg border border-white/10 uppercase">${a.type}</span>
-                            </div>
-                            <p class="text-sm text-[#9146ff] font-black opacity-80 tracking-tight">@${a.id}</p>
-                        </div>
-                    </div>
-                    <div class="bg-black/40 p-5 rounded-3xl min-h-[70px] flex items-center border border-white/5 text-center">
-                        <p class="text-xs text-gray-400 font-bold italic leading-relaxed w-full">${a.intro || '-'}</p>
-                    </div>
-                </div>
-            `).join('');
-        }
-
-        window.filterAllies = function() {
-            const q = document.getElementById('allySearch').value.toLowerCase();
-            document.querySelectorAll('.ally-card').forEach(card => {
-                const name = card.getAttribute('data-name').toLowerCase();
-                const id = card.getAttribute('data-id').toLowerCase();
-                card.style.display = (name.includes(q) || id.includes(q)) ? 'flex' : 'none';
-            });
-        };
-
-        window.switchTab = function(tabId) {
-            document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
-            const targetView = document.getElementById(`${tabId}View`);
-            if(targetView) targetView.classList.remove('hidden');
-            
-            document.querySelectorAll('.tab-btn').forEach(b => {
-                b.classList.remove('bg-[#9146ff]', 'text-white');
-                b.classList.add('text-gray-400');
-            });
-            const targetTab = document.getElementById(`tab-${tabId}`);
-            if(targetTab) {
-                targetTab.classList.add('bg-[#9146ff]', 'text-white');
-                targetTab.classList.remove('text-gray-400');
-            }
-        };
-
-        init();
+        // --- Start ---
+        lucide.createIcons();
+        renderLogs();
+        syncLiveStatus();
+        setInterval(syncLiveStatus, 30000);
     </script>
 </body>
+
 </html>
